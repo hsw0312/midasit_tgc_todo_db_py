@@ -1,31 +1,52 @@
-from typing import Union
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
+from fastapi.responses import RedirectResponse
+from app import crud, database, models, schema
 
 app = FastAPI()
 
-class Item(BaseModel):
-    name: str
-    description: Union[str, None] = None
-    price: float
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
+@app.on_event("startup")
+def startup_event():
+    database.create_tables()
 
 @app.get("/")
-async def read_root():
-    return "This is root path from MyAPI"
+async def root():
+    return RedirectResponse(url="/todos/")
 
-@app.get("/items/{item_id}")
-async def read_item(item_id: int, q: Union[str,  None] = None):
-    return {"item_id": item_id, "q": q}
+@app.get("/todos/")
+async def get_todos(db: Session = Depends(get_db)):
+    todos = crud.get_todos(db)
+    return todos
 
-@app.post("/items/")
-async def create_item(item: Item):
-    return item
+@app.get("/todos/{todo_id}")
+async def get_todo(todo_id: int, db: Session = Depends(get_db)):
+    todo = crud.get_todo(db, todo_id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="todo not found")
+    return todo
 
-@app.put("/items/{item_id}")
-async def update_item(item_id: int, item: Item):
-    result = {"item_id": item_id, **item.dict()}
+@app.post("/todos/")
+async def create_todo(todo: schema.TodoCreate, db: Session = Depends(get_db)):
+    crud.create_todo(db, todo)
 
-@app.delete("/items/{item_id}")
-def delete_item(item_id: int):
-    return {"deleted": item_id}
+@app.put("/todos/{todo_id}")
+async def update_todo(todo_id: int, updated_todo: schema.TodoUpdate, db: Session = Depends(get_db)):
+    db_todo = crud.get_todo(db, todo_id)
+    if db_todo is None:
+        raise HTTPException(status_code=404, detail="todo not found")
+    crud.update_todo(db, db_todo, updated_todo)
+
+@app.delete("/todos/{todo_id}")
+async def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+    db_todo = crud.get_todo(db, todo_id)
+    if db_todo is None:
+        raise HTTPException(status_code=404, detail="todo not found")
+    crud.delete_todo(db, db_todo)
+    return {"message": "todo deleted successfully"}
