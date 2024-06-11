@@ -2,8 +2,27 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from fastapi.responses import RedirectResponse
 from app import crud, database, models, schema
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 def get_db():
     db = database.SessionLocal()
@@ -18,7 +37,7 @@ def startup_event():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/todos/")
+    return {"message": "Hello World"}
 
 @app.get("/todos/")
 async def get_todos(db: Session = Depends(get_db)):
